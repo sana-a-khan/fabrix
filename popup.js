@@ -21,8 +21,7 @@ document.getElementById("scanBtn").addEventListener("click", async () => {
         const { rawText, url, title } = results[0].result;
         const brand = new URL(url).hostname.replace("www.", "").split(".")[0];
 
-        const analysis = await analyzeWithAI(rawText);
-        const data = JSON.parse(analysis);
+        const data = await analyzeWithAI(rawText);
 
         renderResults(data, resultDiv);
 
