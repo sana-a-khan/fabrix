@@ -37,7 +37,11 @@ document.getElementById("scanBtn").addEventListener("click", async () => {
     const saveResult = await saveToSupabase(data, url, title, brand, rawText);
 
     if (saveResult.alreadyExists) {
-      resultDiv.innerHTML += ` <span style="color: #f39c12;">📚 Already in library! Checked ${saveResult.checkCount} time(s)</span>`;
+      if (saveResult.compositionChanged) {
+        resultDiv.innerHTML += ` <span style="color: #e67e22;">🔄 Updated! Composition changed. Checked ${saveResult.checkCount} time(s)</span>`;
+      } else {
+        resultDiv.innerHTML += ` <span style="color: #f39c12;">📚 Already in library! Checked ${saveResult.checkCount} time(s)</span>`;
+      }
     } else {
       resultDiv.innerHTML += " ✅ Saved!";
     }

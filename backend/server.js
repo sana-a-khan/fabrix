@@ -89,7 +89,7 @@ app.post("/save-product", async (req, res) => {
 
     // Check if product already exists
     const checkResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/products?url=eq.${encodeURIComponent(productData.url)}&select=check_count`,
+      `${SUPABASE_URL}/rest/v1/products?url=eq.${encodeURIComponent(productData.url)}&select=check_count,fibers,lining,composition_grade`,
       {
         headers: {
           apikey: SUPABASE_KEY,
@@ -102,8 +102,27 @@ app.post("/save-product", async (req, res) => {
       const existing = await checkResponse.json();
       if (existing && existing.length > 0) {
         const checkCount = (existing[0].check_count || 0) + 1;
+        const existingProduct = existing[0];
 
-        // Update check count
+        // Check if composition has changed
+        const compositionChanged =
+          JSON.stringify(existingProduct.fibers) !== JSON.stringify(productData.fibers) ||
+          JSON.stringify(existingProduct.lining) !== JSON.stringify(productData.lining) ||
+          existingProduct.composition_grade !== productData.composition_grade;
+
+        // Update product with new check count and potentially new composition data
+        const updateData = {
+          check_count: checkCount,
+          ...(compositionChanged ? {
+            fibers: productData.fibers,
+            lining: productData.lining,
+            composition_grade: productData.composition_grade,
+            title: productData.title,
+            brand: productData.brand,
+            raw_text: productData.raw_text,
+          } : {})
+        };
+
         await fetch(`${SUPABASE_URL}/rest/v1/products?url=eq.${encodeURIComponent(productData.url)}`, {
           method: "PATCH",
           headers: {
@@ -111,13 +130,14 @@ app.post("/save-product", async (req, res) => {
             apikey: SUPABASE_KEY,
             Authorization: `Bearer ${SUPABASE_KEY}`,
           },
-          body: JSON.stringify({ check_count: checkCount }),
+          body: JSON.stringify(updateData),
         });
 
         return res.status(200).json({
           message: "Already in library!",
           alreadyExists: true,
-          checkCount: checkCount
+          checkCount: checkCount,
+          compositionChanged: compositionChanged
         });
       }
     }
