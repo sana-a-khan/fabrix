@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+      body {
+        width: 320px;
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+        padding: 20px;
+        background-color: #ffffff;
+        color: #333;
+      }
+
+      h3 {
+        margin-top: 0;
+        margin-bottom: 5px;
+        text-align: center;
+        font-size: 24px;
+        font-weight: 700;
+        letter-spacing: -1px;
+      }
+
+      .subtitle {
+        text-align: center;
+        font-size: 11px;
+        color: #888;
+        margin-bottom: 20px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+
+      button {
+        width: 100%;
+        padding: 14px;
+        background: #000;
+        color: #fff;
+        border: none;
+        border-radius: 4px;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 14px;
+        transition: opacity 0.2s;
+      }
+
+      button:hover {
+        opacity: 0.8;
+      }
+
+      #result {
+        margin-top: 20px;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+
+      ul {
+        padding-left: 20px;
+        margin: 10px 0;
+      }
+
+      li {
+        margin-bottom: 5px;
+      }
+
+      .error {
+        color: #e74c3c;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <h3>natural</h3>
+    <div class="subtitle">Material Scanner</div>
+
+    <button id="scanBtn">SCAN PAGE</button>
+
+    <div id="result"></div>
+    <script src="popup.js"></script>
+  </body>
+</html>
