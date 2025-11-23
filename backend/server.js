@@ -103,7 +103,9 @@ app.post("/save-product", async (req, res) => {
       console.error("Supabase API Error:", err);
       return res
         .status(response.status)
-        .json({ error: "Database Error: " + err.message });
+        .json({
+          error: "Database Error: " + (err.message || err.hint || "Unknown error. Check if RLS policies are configured.")
+        });
     }
 
     res.status(201).json({ message: "Saved successfully!" });
