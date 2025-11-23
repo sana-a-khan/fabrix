@@ -34,8 +34,13 @@ document.getElementById("scanBtn").addEventListener("click", async () => {
     renderResults(data, resultDiv);
 
     resultDiv.innerHTML += "<br><small>Saving to Library...</small>";
-    await saveToSupabase(data, url, title, brand, rawText);
-    resultDiv.innerHTML += " ✅ Saved!";
+    const saveResult = await saveToSupabase(data, url, title, brand, rawText);
+
+    if (saveResult.alreadyExists) {
+      resultDiv.innerHTML += ` <span style="color: #f39c12;">📚 Already in library! Checked ${saveResult.checkCount} time(s)</span>`;
+    } else {
+      resultDiv.innerHTML += " ✅ Saved!";
+    }
   } catch (error) {
     console.error(error);
     resultDiv.innerHTML += `<br><span class="error">Error: ${error.message}</span>`;
@@ -90,6 +95,9 @@ async function saveToSupabase(data, url, title, brand, rawText) {
     const err = await response.json();
     throw new Error("Database Error: " + err.message);
   }
+
+  const result = await response.json();
+  return result;
 }
 
 function renderResults(data, container) {

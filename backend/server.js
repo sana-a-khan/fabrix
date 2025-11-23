@@ -87,15 +87,51 @@ app.post("/save-product", async (req, res) => {
         .json({ error: "Product data is missing or invalid." });
     }
 
+    // Check if product already exists
+    const checkResponse = await fetch(
+      `${SUPABASE_URL}/rest/v1/products?url=eq.${encodeURIComponent(productData.url)}&select=check_count`,
+      {
+        headers: {
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+        },
+      }
+    );
+
+    if (checkResponse.ok) {
+      const existing = await checkResponse.json();
+      if (existing && existing.length > 0) {
+        const checkCount = (existing[0].check_count || 0) + 1;
+
+        // Update check count
+        await fetch(`${SUPABASE_URL}/rest/v1/products?url=eq.${encodeURIComponent(productData.url)}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: SUPABASE_KEY,
+            Authorization: `Bearer ${SUPABASE_KEY}`,
+          },
+          body: JSON.stringify({ check_count: checkCount }),
+        });
+
+        return res.status(200).json({
+          message: "Already in library!",
+          alreadyExists: true,
+          checkCount: checkCount
+        });
+      }
+    }
+
+    // Insert new product with check_count = 1
+    const insertData = { ...productData, check_count: 1 };
     const response = await fetch(`${SUPABASE_URL}/rest/v1/products`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         apikey: SUPABASE_KEY,
         Authorization: `Bearer ${SUPABASE_KEY}`,
-        Prefer: "resolution=ignore-duplicates",
       },
-      body: JSON.stringify(productData),
+      body: JSON.stringify(insertData),
     });
 
     if (!response.ok) {
@@ -108,7 +144,11 @@ app.post("/save-product", async (req, res) => {
         });
     }
 
-    res.status(201).json({ message: "Saved successfully!" });
+    res.status(201).json({
+      message: "Saved successfully!",
+      alreadyExists: false,
+      checkCount: 1
+    });
   } catch (error) {
     console.error("Server Error in /save-product:", error);
     res.status(500).json({ error: "Internal Server Error." });
