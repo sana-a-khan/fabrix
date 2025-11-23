@@ -8,16 +8,25 @@ document.getElementById("scanBtn").addEventListener("click", async () => {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
+    if (!tab || !tab.id) {
+      throw new Error("No active tab found.");
+    }
+
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       function: getPageDetails,
     });
 
-    if (!results || !results[0]) {
-      throw new Error("Could not read page.");
+    if (!results || !results[0] || !results[0].result) {
+      throw new Error("Could not read page. Make sure you're on a product page.");
     }
 
     const { rawText, url, title } = results[0].result;
+
+    if (!rawText || rawText.trim().length === 0) {
+      throw new Error("No text found on page. Please navigate to a product page.");
+    }
+
     const brand = new URL(url).hostname.replace("www.", "").split(".")[0];
 
     const data = await analyzeWithAI(rawText);
@@ -34,8 +43,9 @@ document.getElementById("scanBtn").addEventListener("click", async () => {
 });
 
 function getPageDetails() {
+  const bodyText = document.body?.innerText || document.documentElement?.innerText || "";
   return {
-    rawText: document.body.innerText.substring(0, 6000),
+    rawText: bodyText.substring(0, 6000),
     url: window.location.href,
     title: document.title,
   };
