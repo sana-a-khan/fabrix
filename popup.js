@@ -5,35 +5,32 @@ document.getElementById("scanBtn").addEventListener("click", async () => {
   const resultDiv = document.getElementById("result");
   resultDiv.innerHTML = "Scanning... <br><small>(Analyzing Fabric...)</small>";
 
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
-  chrome.scripting.executeScript(
-    {
+    const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       function: getPageDetails,
-    },
-    async (results) => {
-      try {
-        if (!results || !results[0]) {
-          throw new Error("Could not read page.");
-        }
+    });
 
-        const { rawText, url, title } = results[0].result;
-        const brand = new URL(url).hostname.replace("www.", "").split(".")[0];
-
-        const data = await analyzeWithAI(rawText);
-
-        renderResults(data, resultDiv);
-
-        resultDiv.innerHTML += "<br><small>Saving to Library...</small>";
-        await saveToSupabase(data, url, title, brand, rawText);
-        resultDiv.innerHTML += " ✅ Saved!";
-      } catch (error) {
-        console.error(error);
-        resultDiv.innerHTML += `<br><span class="error">Error: ${error.message}</span>`;
-      }
+    if (!results || !results[0]) {
+      throw new Error("Could not read page.");
     }
-  );
+
+    const { rawText, url, title } = results[0].result;
+    const brand = new URL(url).hostname.replace("www.", "").split(".")[0];
+
+    const data = await analyzeWithAI(rawText);
+
+    renderResults(data, resultDiv);
+
+    resultDiv.innerHTML += "<br><small>Saving to Library...</small>";
+    await saveToSupabase(data, url, title, brand, rawText);
+    resultDiv.innerHTML += " ✅ Saved!";
+  } catch (error) {
+    console.error(error);
+    resultDiv.innerHTML += `<br><span class="error">Error: ${error.message}</span>`;
+  }
 });
 
 function getPageDetails() {
