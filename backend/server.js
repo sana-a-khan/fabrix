@@ -216,6 +216,33 @@ HANDLING MULTIPLE SECTIONS:
   - Decorative elements (ribbing, cuffs, collar) go in "trim"
   - Interlining/padding/insulation goes in "other" with the label (e.g., {"label": "Interlining", "fibers": [...]})
 
+CRITICAL: DO NOT DUPLICATE OR SPLIT DATA ACROSS ARRAYS
+- When you see "Content: X; Trim: Y" or "Shell: X; Lining: Y", these are SEPARATE sections
+- ALL fibers listed under "Content"/"Shell" go ONLY in the "fibers" array
+- ALL fibers listed under "Trim" go ONLY in the "trim" array
+- ALL fibers listed under "Lining" go ONLY in the "lining" array
+- DO NOT mix fibers from different sections into the same array
+- DO NOT split a section's fibers across multiple arrays
+
+Example 1: "Content: 100% cashmere; Trim: 90% cashmere, 9% nylon, 1% elastane"
+  CORRECT: {
+    "fibers": [{"name": "cashmere", "percentage": 100}],
+    "trim": [{"name": "cashmere", "percentage": 90}, {"name": "nylon", "percentage": 9}, {"name": "elastane", "percentage": 1}]
+  }
+  WRONG #1: {
+    "fibers": [{"name": "cashmere", "percentage": 100}, {"name": "cashmere", "percentage": 90}, {"name": "nylon", "percentage": 9}, {"name": "elastane", "percentage": 1}]
+  }
+  WRONG #2: {
+    "fibers": [{"name": "cashmere", "percentage": 100}, {"name": "nylon", "percentage": 9}, {"name": "elastane", "percentage": 1}],
+    "trim": [{"name": "cashmere", "percentage": 90}]
+  }
+
+Example 2: "Shell: 60% cotton, 40% polyester; Lining: 100% polyester"
+  CORRECT: {
+    "fibers": [{"name": "cotton", "percentage": 60}, {"name": "polyester", "percentage": 40}],
+    "lining": [{"name": "polyester", "percentage": 100}]
+  }
+
 RECYCLED/SUSTAINABLE MATERIALS - Include in fiber name:
 - If you see "Recycled", "Reclaimed", "LENZING ECOVERO", "Tencel", "Repreve", "rPET", add "(Recycled)" suffix
 - Examples:
