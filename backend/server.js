@@ -58,6 +58,16 @@ const aiLimiter = rateLimit({
   message: "Too many analysis requests, please try again later.",
 });
 
+// Brute force protection for authentication endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Limit to 5 login attempts per 15 minutes per IP
+  skipSuccessfulRequests: true, // Don't count successful logins
+  message: "Too many login attempts, please try again later.",
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 const OPENAI_KEY = process.env.OPENAI_KEY;
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
@@ -76,6 +86,26 @@ if (JWT_SECRET === "your-secret-key-change-in-production") {
 }
 
 // ============================================
+// SECURITY UTILITIES
+// ============================================
+
+// Validate UUID format to prevent injection
+function isValidUUID(uuid) {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return typeof uuid === 'string' && uuidRegex.test(uuid);
+}
+
+// Sanitize for Supabase query parameters (prevent injection)
+function sanitizeQueryParam(value) {
+  if (typeof value !== 'string') {
+    return String(value);
+  }
+  // Remove or escape characters that could break Supabase queries
+  // Supabase uses PostgREST which is safe, but we add extra layer
+  return value.replace(/['"\\;]/g, '');
+}
+
+// ============================================
 // AUTHENTICATION MIDDLEWARE
 // ============================================
 
@@ -90,6 +120,12 @@ async function authenticateToken(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
+
+    // Security: Validate UUID format to prevent injection
+    if (!isValidUUID(decoded.userId)) {
+      console.error("Invalid UUID in token:", decoded.userId);
+      return res.status(403).json({ error: "Invalid token format" });
+    }
 
     // Fetch user from Supabase to ensure they still exist and get latest data
     const userResponse = await fetch(
@@ -141,6 +177,13 @@ async function optionalAuth(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
+
+    // Validate UUID
+    if (!isValidUUID(decoded.userId)) {
+      req.user = null;
+      return next();
+    }
+
     const userResponse = await fetch(
       `${SUPABASE_URL}/rest/v1/user_profiles?id=eq.${decoded.userId}`,
       {
@@ -170,7 +213,7 @@ async function optionalAuth(req, res, next) {
 // ============================================
 
 // Sign up endpoint (uses Supabase Auth)
-app.post("/auth/signup", async (req, res) => {
+app.post("/auth/signup", authLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -224,7 +267,7 @@ app.post("/auth/signup", async (req, res) => {
 });
 
 // Sign in endpoint
-app.post("/auth/signin", async (req, res) => {
+app.post("/auth/signin", authLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -637,7 +680,7 @@ If NO explicit percentages found: {"fibers": [], "lining": null, "trim": null, "
 });
 
 
-app.post("/save-product", async (req, res) => {
+app.post("/save-product", authenticateToken, async (req, res) => {
   try {
     const productData = req.body;
 
