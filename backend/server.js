@@ -4,6 +4,7 @@ const fetch = require("node-fetch");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const validator = require("validator");
+const jwt = require("jsonwebtoken");
 require("dotenv").config({ path: "../.env" });
 
 const app = express();

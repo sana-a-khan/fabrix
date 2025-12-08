@@ -61,8 +61,10 @@ document.getElementById("scanBtn").addEventListener("click", async () => {
       resultDiv.innerHTML += "<br>✅ Saved to library!";
     }
   } catch (error) {
-    console.error(error);
-    resultDiv.innerHTML += `<br><span class="error">Error: ${error.message}</span>`;
+    console.error("Full error object:", error);
+    console.error("Error message:", error.message);
+    console.error("Error stack:", error.stack);
+    resultDiv.innerHTML += `<br><span class="error">Error: ${error.message || error.toString() || 'Unknown error occurred'}</span>`;
   }
 });
 
