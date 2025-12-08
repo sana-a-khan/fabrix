@@ -10,15 +10,15 @@
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
-      "16": "icon.png",
-      "48": "icon.png",
-      "128": "icon.png"
+      "16": "icons/leaf_16x16.png",
+      "48": "icons/leaf_48x48.png",
+      "128": "icons/leaf_128x128.png"
     }
   },
   "icons": {
-    "16": "icon.png",
-    "48": "icon.png",
-    "128": "icon.png"
+    "16": "icons/leaf_16x16.png",
+    "48": "icons/leaf_48x48.png",
+    "128": "icons/leaf_128x128.png"
   },
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' http://localhost:3000"
