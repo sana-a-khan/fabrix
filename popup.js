@@ -1,4 +1,7 @@
-const BACKEND_URL = "http://localhost:3000";
+// Configuration - uses CONFIG from config.js (or defaults to localhost)
+const BACKEND_URL = (typeof CONFIG !== 'undefined' && CONFIG.BACKEND_URL)
+  ? CONFIG.BACKEND_URL
+  : "http://localhost:3000";
 const OPENAI_BACKEND_URL = `${BACKEND_URL}/analyze`;
 const SUPABASE_BACKEND_URL = `${BACKEND_URL}/save-product`;
 
