@@ -8,13 +8,11 @@
  */
 
 const CONFIG = {
-  // ⚠️ CHANGE THIS BEFORE PUBLISHING ⚠️
-  BACKEND_URL: "http://localhost:3000",
+  // ✅ Production backend URL
+  BACKEND_URL: "https://fabrix-backend.onrender.com",
 
-  // For production, replace with your deployed backend:
-  // BACKEND_URL: "https://fabrix-backend.railway.app",
-  // BACKEND_URL: "https://fabrix-api.onrender.com",
-  // BACKEND_URL: "https://your-app.herokuapp.com",
+  // For local development, use:
+  // BACKEND_URL: "http://localhost:3000",
 
   // Version
   VERSION: "1.0.0",

@@ -5,7 +5,7 @@
   "description": "Scan fashion products for fabric composition and track natural vs synthetic materials.",
   "permissions": ["activeTab", "scripting", "storage"],
   "host_permissions": [
-    "http://localhost:3000/*"
+    "https://fabrix-backend.onrender.com/*"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -21,6 +21,6 @@
     "128": "icons/leaf_128x128.png"
   },
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' http://localhost:3000"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://fabrix-backend.onrender.com"
   }
 }
