@@ -4,11 +4,16 @@
     <meta charset="UTF-8">
     <style>
       body {
-        width: 320px;
+        width: 340px;
         font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-        padding: 20px;
+        padding: 0;
+        margin: 0;
         background-color: #ffffff;
         color: #333;
+      }
+
+      .container {
+        padding: 20px;
       }
 
       h3 {
@@ -46,6 +51,65 @@
         opacity: 0.8;
       }
 
+      button.secondary {
+        background: #fff;
+        color: #000;
+        border: 1px solid #ddd;
+      }
+
+      input[type="email"],
+      input[type="password"] {
+        width: 100%;
+        padding: 12px;
+        margin-bottom: 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+        box-sizing: border-box;
+      }
+
+      input:focus {
+        outline: none;
+        border-color: #000;
+      }
+
+      .error {
+        color: #e74c3c;
+        font-size: 12px;
+        margin-bottom: 10px;
+        text-align: center;
+      }
+
+      .link {
+        text-align: center;
+        font-size: 12px;
+        margin-top: 15px;
+        color: #7f8c8d;
+      }
+
+      .link a {
+        color: #000;
+        text-decoration: none;
+        font-weight: 600;
+      }
+
+      .link a:hover {
+        text-decoration: underline;
+      }
+
+      #authScreen, #scanScreen {
+        display: none;
+      }
+
+      #userInfo {
+        background: #f8f9fa;
+        padding: 12px;
+        border-radius: 4px;
+        margin-bottom: 15px;
+        font-size: 13px;
+        text-align: center;
+      }
+
       #result {
         margin-top: 20px;
         font-size: 14px;
@@ -61,19 +125,72 @@
         margin-bottom: 5px;
       }
 
-      .error {
+      .error-text {
         color: #e74c3c;
         font-weight: bold;
+      }
+
+      .user-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 15px;
+      }
+
+      .user-actions button {
+        flex: 1;
+        padding: 10px;
+        font-size: 12px;
       }
     </style>
   </head>
   <body>
-    <h3>natural</h3>
-    <div class="subtitle">Material Scanner</div>
+    <div class="container">
+      <h3>fabrix</h3>
+      <div class="subtitle">Fabric Scanner</div>
 
-    <button id="scanBtn">SCAN PAGE</button>
+      <!-- Authentication Screen -->
+      <div id="authScreen">
+        <!-- Sign In Form -->
+        <div id="signinForm">
+          <input type="email" id="signinEmail" placeholder="Email" />
+          <input type="password" id="signinPassword" placeholder="Password" />
+          <div class="error" id="signinError"></div>
+          <button id="signinBtn">SIGN IN</button>
+          <div class="link">
+            Don't have an account? <a href="#" id="showSignup">Sign up</a>
+          </div>
+        </div>
 
-    <div id="result"></div>
+        <!-- Sign Up Form -->
+        <div id="signupForm" style="display:none;">
+          <input type="email" id="signupEmail" placeholder="Email" />
+          <input type="password" id="signupPassword" placeholder="Password (min 8 chars)" />
+          <div class="error" id="signupError"></div>
+          <button id="signupBtn">CREATE FREE ACCOUNT</button>
+          <div class="link">
+            Already have an account? <a href="#" id="showSignin">Sign in</a>
+          </div>
+          <div style="font-size: 11px; color: #95a5a6; margin-top: 15px; text-align: center;">
+            Free: 10 scans/month<br>
+            Premium ($7.99/mo): 100 scans/month
+          </div>
+        </div>
+      </div>
+
+      <!-- Scan Screen (logged in) -->
+      <div id="scanScreen">
+        <div id="userInfo"></div>
+
+        <button id="scanBtn">SCAN PAGE</button>
+
+        <div id="result"></div>
+
+        <div class="user-actions">
+          <button class="secondary" id="logoutBtn">Logout</button>
+        </div>
+      </div>
+    </div>
+
     <script src="popup.js"></script>
   </body>
 </html>

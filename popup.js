@@ -1,5 +1,181 @@
-const OPENAI_BACKEND_URL = "http://localhost:3000/analyze";
-const SUPABASE_BACKEND_URL = "http://localhost:3000/save-product";
+const BACKEND_URL = "http://localhost:3000";
+const OPENAI_BACKEND_URL = `${BACKEND_URL}/analyze`;
+const SUPABASE_BACKEND_URL = `${BACKEND_URL}/save-product`;
+
+// ============================================
+// AUTHENTICATION STATE MANAGEMENT
+// ============================================
+
+let currentUser = null;
+
+// Check authentication status on load
+document.addEventListener("DOMContentLoaded", async () => {
+  await checkAuthStatus();
+});
+
+async function checkAuthStatus() {
+  const token = await getStoredToken();
+
+  if (!token) {
+    showAuthScreen();
+    return;
+  }
+
+  try {
+    const response = await fetch(`${BACKEND_URL}/auth/me`, {
+      headers: {
+        "Authorization": `Bearer ${token}`
+      }
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      currentUser = data.user;
+      showScanScreen();
+      updateScanInfo();
+    } else {
+      // Token invalid, clear and show auth
+      await clearToken();
+      showAuthScreen();
+    }
+  } catch (error) {
+    console.error("Auth check failed:", error);
+    showAuthScreen();
+  }
+}
+
+async function getStoredToken() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(["authToken"], (result) => {
+      resolve(result.authToken || null);
+    });
+  });
+}
+
+async function storeToken(token) {
+  return new Promise((resolve) => {
+    chrome.storage.local.set({ authToken: token }, resolve);
+  });
+}
+
+async function clearToken() {
+  return new Promise((resolve) => {
+    chrome.storage.local.remove(["authToken"], resolve);
+  });
+}
+
+function showAuthScreen() {
+  document.getElementById("authScreen").style.display = "block";
+  document.getElementById("scanScreen").style.display = "none";
+}
+
+function showScanScreen() {
+  document.getElementById("authScreen").style.display = "none";
+  document.getElementById("scanScreen").style.display = "block";
+}
+
+function updateScanInfo() {
+  if (!currentUser) return;
+
+  const tierBadge = currentUser.subscription_tier === 'premium'
+    ? '<span style="background:#27ae60; color:white; padding:2px 6px; border-radius:3px; font-size:10px; margin-left:5px;">PRO</span>'
+    : '<span style="background:#95a5a6; color:white; padding:2px 6px; border-radius:3px; font-size:10px; margin-left:5px;">FREE</span>';
+
+  document.getElementById("userInfo").innerHTML = `
+    ${escapeHtml(currentUser.email)}${tierBadge}<br>
+    <small style="color:#7f8c8d;">${currentUser.scans_remaining} scans remaining this month</small>
+  `;
+}
+
+// ============================================
+// AUTHENTICATION HANDLERS
+// ============================================
+
+document.getElementById("showSignup").addEventListener("click", (e) => {
+  e.preventDefault();
+  document.getElementById("signinForm").style.display = "none";
+  document.getElementById("signupForm").style.display = "block";
+});
+
+document.getElementById("showSignin").addEventListener("click", (e) => {
+  e.preventDefault();
+  document.getElementById("signupForm").style.display = "none";
+  document.getElementById("signinForm").style.display = "block";
+});
+
+document.getElementById("signinBtn").addEventListener("click", async () => {
+  const email = document.getElementById("signinEmail").value;
+  const password = document.getElementById("signinPassword").value;
+  const errorDiv = document.getElementById("signinError");
+
+  errorDiv.textContent = "";
+
+  try {
+    const response = await fetch(`${BACKEND_URL}/auth/signin`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Sign in failed");
+    }
+
+    await storeToken(data.token);
+    currentUser = data.user;
+    showScanScreen();
+    updateScanInfo();
+  } catch (error) {
+    errorDiv.textContent = error.message;
+  }
+});
+
+document.getElementById("signupBtn").addEventListener("click", async () => {
+  const email = document.getElementById("signupEmail").value;
+  const password = document.getElementById("signupPassword").value;
+  const errorDiv = document.getElementById("signupError");
+
+  errorDiv.textContent = "";
+
+  if (password.length < 8) {
+    errorDiv.textContent = "Password must be at least 8 characters";
+    return;
+  }
+
+  try {
+    const response = await fetch(`${BACKEND_URL}/auth/signup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Signup failed");
+    }
+
+    await storeToken(data.token);
+    currentUser = data.user;
+    showScanScreen();
+    updateScanInfo();
+  } catch (error) {
+    errorDiv.textContent = error.message;
+  }
+});
+
+document.getElementById("logoutBtn").addEventListener("click", async () => {
+  await clearToken();
+  currentUser = null;
+  showAuthScreen();
+  document.getElementById("result").innerHTML = "";
+});
+
+// ============================================
+// SCAN FUNCTIONALITY
+// ============================================
 
 document.getElementById("scanBtn").addEventListener("click", async () => {
   const resultDiv = document.getElementById("result");
@@ -48,6 +224,12 @@ document.getElementById("scanBtn").addEventListener("click", async () => {
     const data = await analyzeWithAI(rawText);
 
     renderResults(data, resultDiv);
+
+    // Update scan count after successful analysis
+    if (data.scans_remaining !== undefined) {
+      currentUser.scans_remaining = data.scans_remaining;
+      updateScanInfo();
+    }
 
     const saveResult = await saveToSupabase(data, url, title, brand, rawText);
 
@@ -302,17 +484,32 @@ function getPageDetails() {
 }
 
 async function analyzeWithAI(text) {
+  const token = await getStoredToken();
+
   const response = await fetch(OPENAI_BACKEND_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`
     },
     body: JSON.stringify({ text }),
   });
 
   if (!response.ok) {
     const err = await response.json();
-    throw new Error("OpenAI API Error: " + err.error.message);
+
+    // Handle specific error cases
+    if (response.status === 403 && err.scans_remaining !== undefined) {
+      // Out of scans
+      throw new Error(err.message || err.error);
+    }
+
+    if (response.status === 429) {
+      // Rate limited or abuse detected
+      throw new Error(err.message || "Too many requests. Please try again later.");
+    }
+
+    throw new Error(err.error || "Analysis failed");
   }
 
   const data = await response.json();

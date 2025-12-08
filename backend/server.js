@@ -61,6 +61,7 @@ const aiLimiter = rateLimit({
 const OPENAI_KEY = process.env.OPENAI_KEY;
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
+const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-in-production";
 
 if (!OPENAI_KEY || !SUPABASE_URL || !SUPABASE_KEY) {
   console.error("Critical Error: Missing API keys in .env file.");
@@ -69,6 +70,256 @@ if (!OPENAI_KEY || !SUPABASE_URL || !SUPABASE_KEY) {
   );
   process.exit(1);
 }
+
+if (JWT_SECRET === "your-secret-key-change-in-production") {
+  console.warn("WARNING: Using default JWT_SECRET. Please set JWT_SECRET in .env for production!");
+}
+
+// ============================================
+// AUTHENTICATION MIDDLEWARE
+// ============================================
+
+// Middleware to verify JWT token
+async function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+  if (!token) {
+    return res.status(401).json({ error: "Authentication required" });
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    // Fetch user from Supabase to ensure they still exist and get latest data
+    const userResponse = await fetch(
+      `${SUPABASE_URL}/rest/v1/user_profiles?id=eq.${decoded.userId}`,
+      {
+        headers: {
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+        },
+      }
+    );
+
+    if (!userResponse.ok) {
+      return res.status(401).json({ error: "Invalid token" });
+    }
+
+    const users = await userResponse.json();
+    if (!users || users.length === 0) {
+      return res.status(401).json({ error: "User not found" });
+    }
+
+    const user = users[0];
+
+    // Check if user is flagged
+    if (user.is_flagged) {
+      return res.status(403).json({
+        error: "Account suspended",
+        reason: user.flagged_reason || "Terms of service violation"
+      });
+    }
+
+    req.user = user;
+    next();
+  } catch (error) {
+    console.error("Auth error:", error);
+    return res.status(403).json({ error: "Invalid or expired token" });
+  }
+}
+
+// Optional auth middleware (allows unauthenticated requests)
+async function optionalAuth(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    req.user = null;
+    return next();
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const userResponse = await fetch(
+      `${SUPABASE_URL}/rest/v1/user_profiles?id=eq.${decoded.userId}`,
+      {
+        headers: {
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+        },
+      }
+    );
+
+    if (userResponse.ok) {
+      const users = await userResponse.json();
+      if (users && users.length > 0) {
+        req.user = users[0];
+      }
+    }
+  } catch (error) {
+    // Invalid token, but we don't fail - just set user to null
+    req.user = null;
+  }
+
+  next();
+}
+
+// ============================================
+// AUTHENTICATION ROUTES
+// ============================================
+
+// Sign up endpoint (uses Supabase Auth)
+app.post("/auth/signup", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // Validate email and password
+    if (!email || !validator.isEmail(email)) {
+      return res.status(400).json({ error: "Valid email required" });
+    }
+
+    if (!password || password.length < 8) {
+      return res.status(400).json({ error: "Password must be at least 8 characters" });
+    }
+
+    // Create user in Supabase Auth
+    const signupResponse = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_KEY,
+      },
+      body: JSON.stringify({ email, password }),
+    });
+
+    const signupData = await signupResponse.json();
+
+    if (!signupResponse.ok) {
+      return res.status(signupResponse.status).json({
+        error: signupData.msg || signupData.error_description || "Signup failed"
+      });
+    }
+
+    // Generate our own JWT token for the extension
+    const token = jwt.sign(
+      { userId: signupData.user.id, email: signupData.user.email },
+      JWT_SECRET,
+      { expiresIn: "30d" }
+    );
+
+    res.status(201).json({
+      token,
+      user: {
+        id: signupData.user.id,
+        email: signupData.user.email,
+        subscription_tier: "free",
+        scans_remaining: 10,
+      },
+    });
+  } catch (error) {
+    console.error("Signup error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Sign in endpoint
+app.post("/auth/signin", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // Validate input
+    if (!email || !validator.isEmail(email)) {
+      return res.status(400).json({ error: "Valid email required" });
+    }
+
+    if (!password) {
+      return res.status(400).json({ error: "Password required" });
+    }
+
+    // Sign in with Supabase Auth
+    const signinResponse = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_KEY,
+      },
+      body: JSON.stringify({ email, password }),
+    });
+
+    const signinData = await signinResponse.json();
+
+    if (!signinResponse.ok) {
+      return res.status(401).json({
+        error: "Invalid email or password"
+      });
+    }
+
+    // Get user profile data
+    const profileResponse = await fetch(
+      `${SUPABASE_URL}/rest/v1/user_profiles?id=eq.${signinData.user.id}`,
+      {
+        headers: {
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+        },
+      }
+    );
+
+    const profiles = await profileResponse.json();
+    const profile = profiles[0];
+
+    // Check if flagged
+    if (profile && profile.is_flagged) {
+      return res.status(403).json({
+        error: "Account suspended",
+        reason: profile.flagged_reason
+      });
+    }
+
+    // Generate our JWT token
+    const token = jwt.sign(
+      { userId: signinData.user.id, email: signinData.user.email },
+      JWT_SECRET,
+      { expiresIn: "30d" }
+    );
+
+    res.json({
+      token,
+      user: {
+        id: profile.id,
+        email: profile.email,
+        subscription_tier: profile.subscription_tier,
+        scans_remaining: profile.scans_remaining,
+      },
+    });
+  } catch (error) {
+    console.error("Signin error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Get current user info
+app.get("/auth/me", authenticateToken, async (req, res) => {
+  try {
+    res.json({
+      user: {
+        id: req.user.id,
+        email: req.user.email,
+        subscription_tier: req.user.subscription_tier,
+        scans_remaining: req.user.scans_remaining,
+        scans_used_today: req.user.scans_used_today,
+      },
+    });
+  } catch (error) {
+    console.error("Get user error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ============================================
+// PRODUCT ANALYSIS ROUTES
+// ============================================
 
 // Security: Input validation helper
 function validateText(text) {
@@ -170,7 +421,7 @@ function validateProductData(data) {
   return errors;
 }
 
-app.post("/analyze", aiLimiter, async (req, res) => {
+app.post("/analyze", aiLimiter, authenticateToken, async (req, res) => {
   try {
     const { text } = req.body;
 
@@ -179,6 +430,60 @@ app.post("/analyze", aiLimiter, async (req, res) => {
     if (!validation.valid) {
       return res.status(400).json({ error: validation.error });
     }
+
+    // Check scan limit
+    if (req.user.scans_remaining <= 0) {
+      return res.status(403).json({
+        error: "No scans remaining",
+        scans_remaining: 0,
+        subscription_tier: req.user.subscription_tier,
+        message: req.user.subscription_tier === 'free'
+          ? "Upgrade to premium for 100 scans per month"
+          : "Monthly scan limit reached. Resets on the 1st of next month."
+      });
+    }
+
+    // Check abuse: flag users who scan too many times per day
+    const DAILY_ABUSE_THRESHOLD = req.user.subscription_tier === 'premium' ? 50 : 20;
+    if (req.user.scans_used_today >= DAILY_ABUSE_THRESHOLD) {
+      // Flag user for potential abuse
+      await fetch(`${SUPABASE_URL}/rest/v1/user_profiles?id=eq.${req.user.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+        },
+        body: JSON.stringify({
+          is_flagged: true,
+          flagged_reason: `Exceeded daily scan limit (${req.user.scans_used_today} scans in one day)`
+        }),
+      });
+
+      return res.status(429).json({
+        error: "Daily scan limit exceeded",
+        message: "Your account has been flagged for unusual activity. Please contact support."
+      });
+    }
+
+    // Decrement scan count using database function
+    const incrementResponse = await fetch(`${SUPABASE_URL}/rest/v1/rpc/increment_scan_usage`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+      },
+      body: JSON.stringify({ p_user_id: req.user.id }),
+    });
+
+    if (!incrementResponse.ok) {
+      console.error("Failed to increment scan usage");
+      return res.status(500).json({ error: "Failed to track scan usage" });
+    }
+
+    const scanData = await incrementResponse.json();
+    const scansRemaining = scanData[0]?.scans_remaining || 0;
 
     // DEBUG: Log first 1000 chars of text being analyzed
     console.log("\n=== ANALYZING TEXT (first 1000 chars) ===");
@@ -319,7 +624,12 @@ If NO explicit percentages found: {"fibers": [], "lining": null, "trim": null, "
       return res.status(500).json({ error: "Invalid AI response format" });
     }
 
-    res.json(parsedData);
+    // Include scan info in response
+    res.json({
+      ...parsedData,
+      scans_remaining: scansRemaining,
+      subscription_tier: req.user.subscription_tier
+    });
   } catch (error) {
     console.error("Server Error in /analyze:", error);
     res.status(500).json({ error: "Internal Server Error." });

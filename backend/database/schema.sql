@@ -59,7 +59,7 @@ BEGIN
   SET
     scans_remaining = CASE
       WHEN subscription_tier = 'free' THEN 10
-      WHEN subscription_tier = 'premium' THEN 300
+      WHEN subscription_tier = 'premium' THEN 100
       ELSE 10
     END,
     last_reset_date = CURRENT_DATE
@@ -92,7 +92,7 @@ BEGIN
       WHEN last_reset_date < DATE_TRUNC('month', CURRENT_DATE) THEN
         CASE
           WHEN subscription_tier = 'free' THEN 10
-          WHEN subscription_tier = 'premium' THEN 300
+          WHEN subscription_tier = 'premium' THEN 100
           ELSE 10
         END
       ELSE scans_remaining
