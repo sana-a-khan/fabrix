@@ -8,6 +8,7 @@ const jwt = require("jsonwebtoken");
 require("dotenv").config({ path: "../.env" });
 
 const app = express();
+app.set('trust proxy', 1); // Trust proxy for rate limiting on Render
 const PORT = process.env.PORT || 3000;
 
 // Security: Helmet for security headers
@@ -242,6 +243,12 @@ app.post("/auth/signup", authLimiter, async (req, res) => {
       return res.status(signupResponse.status).json({
         error: signupData.msg || signupData.error_description || "Signup failed"
       });
+    }
+
+    // Security: Ensure user object exists before proceeding
+    if (!signupData.user || !signupData.user.id) {
+        console.error("Signup succeeded but response was missing user data:", signupData);
+        return res.status(500).json({ error: "Signup confirmation sent, but failed to create session. Please try logging in." });
     }
 
     // Generate our own JWT token for the extension
