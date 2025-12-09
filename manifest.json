@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "fabrix",
-  "version": "1.0",
+  "version": "1.0.0",
   "description": "Scan fashion products for fabric composition and track natural vs synthetic materials.",
   "permissions": ["activeTab", "scripting", "storage"],
   "host_permissions": [
@@ -20,6 +20,7 @@
     "48": "icons/leaf_48x48.png",
     "128": "icons/leaf_128x128.png"
   },
+  "homepage_url": "https://sana-a-khan.github.io/fabrix/privacy-policy",
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://fabrix-backend.onrender.com"
   }
