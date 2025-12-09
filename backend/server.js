@@ -41,33 +41,25 @@ app.use(cors({
 // Security: Request size limits (prevent large payload attacks)
 app.use(express.json({ limit: "50kb" }));
 
-// Security: Rate limiting to prevent abuse
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
-  message: "Too many requests from this IP, please try again later.",
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+if (process.env.NODE_ENV !== 'test') {
+  const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per windowMs
+    message: "Too many requests from this IP, please try again later.",
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+  app.use(limiter);
 
-app.use(limiter);
+  // Stricter rate limit for AI analysis endpoint (more expensive)
+  const aiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 30, // Limit to 30 AI requests per 15 minutes
+    message: "Too many analysis requests, please try again later.",
+  });
+  app.use("/analyze", aiLimiter);
 
-// Stricter rate limit for AI analysis endpoint (more expensive)
-const aiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 30, // Limit to 30 AI requests per 15 minutes
-  message: "Too many analysis requests, please try again later.",
-});
-
-// Brute force protection for authentication endpoints
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Limit to 5 login attempts per 15 minutes per IP
-  skipSuccessfulRequests: true, // Don't count successful logins
-  message: "Too many login attempts, please try again later.",
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+}
 
 const OPENAI_KEY = process.env.OPENAI_KEY;
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -213,8 +205,7 @@ async function optionalAuth(req, res, next) {
 // AUTHENTICATION ROUTES
 // ============================================
 
-// Sign up endpoint (uses Supabase Auth)
-app.post("/auth/signup", authLimiter, async (req, res) => {
+const signupHandler = async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -227,6 +218,11 @@ app.post("/auth/signup", authLimiter, async (req, res) => {
       return res.status(400).json({ error: "Password must be at least 8 characters" });
     }
 
+    const signupDetails = { email, password };
+    if (process.env.NODE_ENV === 'test') {
+      signupDetails.email_confirm = true;
+    }
+
     // Create user in Supabase Auth
     const signupResponse = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
       method: "POST",
@@ -234,7 +230,7 @@ app.post("/auth/signup", authLimiter, async (req, res) => {
         "Content-Type": "application/json",
         apikey: SUPABASE_KEY,
       },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify(signupDetails),
     });
 
     const signupData = await signupResponse.json();
@@ -246,14 +242,14 @@ app.post("/auth/signup", authLimiter, async (req, res) => {
     }
 
     // Security: Ensure user object exists before proceeding
-    if (!signupData.user || !signupData.user.id) {
+    if (!signupData.id) {
         console.error("Signup succeeded but response was missing user data:", signupData);
         return res.status(500).json({ error: "Signup confirmation sent, but failed to create session. Please try logging in." });
     }
 
     // Generate our own JWT token for the extension
     const token = jwt.sign(
-      { userId: signupData.user.id, email: signupData.user.email },
+      { userId: signupData.id, email: signupData.email },
       JWT_SECRET,
       { expiresIn: "30d" }
     );
@@ -261,8 +257,8 @@ app.post("/auth/signup", authLimiter, async (req, res) => {
     res.status(201).json({
       token,
       user: {
-        id: signupData.user.id,
-        email: signupData.user.email,
+        id: signupData.id,
+        email: signupData.email,
         subscription_tier: "free",
         scans_remaining: 10,
       },
@@ -271,10 +267,9 @@ app.post("/auth/signup", authLimiter, async (req, res) => {
     console.error("Signup error:", error);
     res.status(500).json({ error: "Internal server error" });
   }
-});
+};
 
-// Sign in endpoint
-app.post("/auth/signin", authLimiter, async (req, res) => {
+const signinHandler = async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -347,7 +342,23 @@ app.post("/auth/signin", authLimiter, async (req, res) => {
     console.error("Signin error:", error);
     res.status(500).json({ error: "Internal server error" });
   }
-});
+};
+
+if (process.env.NODE_ENV !== 'test') {
+  const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 5, // Limit to 5 login attempts per 15 minutes per IP
+    skipSuccessfulRequests: true, // Don't count successful logins
+    message: "Too many login attempts, please try again later.",
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+  app.post("/auth/signup", authLimiter, signupHandler);
+  app.post("/auth/signin", authLimiter, signinHandler);
+} else {
+  app.post("/auth/signup", signupHandler);
+  app.post("/auth/signin", signinHandler);
+}
 
 // Get current user info
 app.get("/auth/me", authenticateToken, async (req, res) => {
@@ -471,7 +482,7 @@ function validateProductData(data) {
   return errors;
 }
 
-app.post("/analyze", aiLimiter, authenticateToken, async (req, res) => {
+const analyzeHandler = async (req, res) => {
   try {
     const { text } = req.body;
 
@@ -684,7 +695,18 @@ If NO explicit percentages found: {"fibers": [], "lining": null, "trim": null, "
     console.error("Server Error in /analyze:", error);
     res.status(500).json({ error: "Internal Server Error." });
   }
-});
+};
+
+if (process.env.NODE_ENV !== 'test') {
+  const aiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 30, // Limit to 30 AI requests per 15 minutes
+    message: "Too many analysis requests, please try again later.",
+  });
+  app.post("/analyze", aiLimiter, authenticateToken, analyzeHandler);
+} else {
+  app.post("/analyze", authenticateToken, analyzeHandler);
+}
 
 
 app.post("/save-product", authenticateToken, async (req, res) => {
@@ -806,7 +828,11 @@ app.post("/save-product", authenticateToken, async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`ntrl backend server listening on http://localhost:${PORT}`);
-  console.log("Security features enabled: CORS restrictions, rate limiting, input validation");
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`ntrl backend server listening on http://localhost:${PORT}`);
+    console.log("Security features enabled: CORS restrictions, rate limiting, input validation");
+  });
+}
+
+module.exports = app;
