@@ -233,7 +233,23 @@ const signupHandler = async (req, res) => {
       body: JSON.stringify(signupDetails),
     });
 
-    const signupData = await signupResponse.json();
+    // Handle rate limiting gracefully
+    if (signupResponse.status === 429) {
+      return res.status(429).json({
+        error: "Too many signup attempts. Please wait a few minutes and try again.",
+        retryAfter: 60 // seconds
+      });
+    }
+
+    let signupData;
+    try {
+      signupData = await signupResponse.json();
+    } catch (e) {
+      // If response is not JSON, return generic error
+      return res.status(signupResponse.status).json({
+        error: "Authentication service error. Please try again later."
+      });
+    }
 
     if (!signupResponse.ok) {
       return res.status(signupResponse.status).json({
@@ -292,7 +308,23 @@ const signinHandler = async (req, res) => {
       body: JSON.stringify({ email, password }),
     });
 
-    const signinData = await signinResponse.json();
+    // Handle rate limiting gracefully
+    if (signinResponse.status === 429) {
+      return res.status(429).json({
+        error: "Too many login attempts. Please wait a few minutes and try again.",
+        retryAfter: 60 // seconds
+      });
+    }
+
+    let signinData;
+    try {
+      signinData = await signinResponse.json();
+    } catch (e) {
+      // If response is not JSON, return generic error
+      return res.status(signinResponse.status).json({
+        error: "Authentication service error. Please try again later."
+      });
+    }
 
     if (!signinResponse.ok) {
       return res.status(401).json({
