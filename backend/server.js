@@ -332,9 +332,20 @@ const signinHandler = async (req, res) => {
       });
     }
 
+    // Extract user ID from signin response
+    // Supabase token response structure: { user: {...}, access_token: "..." }
+    const userId = signinData.user?.id;
+
+    if (!userId) {
+      console.error("Signin succeeded but no user ID in response:", signinData);
+      return res.status(500).json({
+        error: "Authentication succeeded but failed to retrieve user data. Please try again."
+      });
+    }
+
     // Get user profile data
     const profileResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/user_profiles?id=eq.${signinData.user.id}`,
+      `${SUPABASE_URL}/rest/v1/user_profiles?id=eq.${userId}`,
       {
         headers: {
           apikey: SUPABASE_KEY,
@@ -346,6 +357,13 @@ const signinHandler = async (req, res) => {
     const profiles = await profileResponse.json();
     const profile = profiles[0];
 
+    if (!profile) {
+      console.error("User authenticated but no profile found for ID:", userId);
+      return res.status(500).json({
+        error: "Account profile not found. Please contact support."
+      });
+    }
+
     // Check if flagged
     if (profile && profile.is_flagged) {
       return res.status(403).json({
@@ -356,7 +374,7 @@ const signinHandler = async (req, res) => {
 
     // Generate our JWT token
     const token = jwt.sign(
-      { userId: signinData.user.id, email: signinData.user.email },
+      { userId: userId, email: profile.email },
       JWT_SECRET,
       { expiresIn: "30d" }
     );
